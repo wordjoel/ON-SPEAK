@@ -64,7 +64,9 @@ Identidade do app: nome **ON SPEAK**, pacote `com.original.onspeak`.
 
 ## Repositório oficial
 
-🔗 **https://github.com/wordjoel/ON-SPEAK** (branch `main`)
+🌐 **Aplicação online (PWA):** **https://on-speak.vercel.app**
+
+🔗 **Repositório oficial:** https://github.com/wordjoel/ON-SPEAK (branch `main`)
 
 ```powershell
 git clone https://github.com/wordjoel/ON-SPEAK.git
