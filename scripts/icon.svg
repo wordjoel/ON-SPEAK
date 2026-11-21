@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12B39B"/>
+      <stop offset="0.55" stop-color="#0F9D8C"/>
+      <stop offset="1" stop-color="#0B7A6E"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC44D"/>
+      <stop offset="1" stop-color="#F5A524"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="222" r="150" fill="#fff" opacity="0.08"/>
+  <!-- parrot head -->
+  <path d="M256 92c74 0 122 52 122 126 0 78-55 128-122 128S134 296 134 218C134 144 182 92 256 92Z" fill="#fff"/>
+  <path d="M256 92c22 0 41 5 57 13-28 2-54 18-70 43-20 31-20 78 2 116-46-19-75-60-75-113C170 127 207 92 256 92Z" fill="#D9F4EE"/>
+  <!-- eyes -->
+  <circle cx="212" cy="206" r="27" fill="#fff"/>
+  <circle cx="300" cy="206" r="27" fill="#fff"/>
+  <circle cx="216" cy="210" r="13" fill="#12303A"/>
+  <circle cx="296" cy="210" r="13" fill="#12303A"/>
+  <circle cx="221" cy="205" r="4.5" fill="#fff"/>
+  <circle cx="301" cy="205" r="4.5" fill="#fff"/>
+  <!-- cheeks -->
+  <ellipse cx="180" cy="248" rx="20" ry="11" fill="#FF9E9E" opacity=".6"/>
+  <ellipse cx="332" cy="248" rx="20" ry="11" fill="#FF9E9E" opacity=".6"/>
+  <!-- beak -->
+  <path d="M230 252h52l-26 42Z" fill="url(#beak)"/>
+  <!-- crest -->
+  <path d="M236 96q-8-34 18-48 12 24 12 48Z" fill="#FFC44D"/>
+  <!-- text ON -->
+  <text x="256" y="430" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="900" letter-spacing="6" fill="#fff" text-anchor="middle">ON SPEAK</text>
+</svg>

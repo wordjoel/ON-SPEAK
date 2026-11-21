@@ -17,6 +17,7 @@ O **ON SPEAK** reúne o melhor de dois mundos em um só app original:
 - **Progresso**: aulas concluídas, minutos, XP, sequência diária, gráfico semanal e conquistas — somado tanto pela conversa quanto pelos exercícios.
 - **Feedback rico**: sons, vibração e animações de acerto/erro nos exercícios.
 - **Tema claro/escuro**, onboarding e persistência local.
+- **PWA instalável**: interface web responsiva e moderna, com service worker (funciona offline), ícones adaptativos, banner de instalação e atalhos na tela inicial.
 
 ## Instalar
 
@@ -25,6 +26,14 @@ Copie `OnSpeak-debug.apk` para o celular e abra o arquivo (é um build de depura
 ```powershell
 adb install -r OnSpeak-debug.apk
 ```
+
+### Como PWA (recomendado para testar)
+
+1. Rode `npm run dev` e abra **http://127.0.0.1:5173/**.
+2. No Chrome/Edge, toque no ícone de **instalar app** na barra de endereço (ou no banner “Instale o ON SPEAK”).
+3. O app abre em janela própria, sem barra do navegador, e funciona **offline** (service worker).
+
+> Para testar de verdade no celular, publique o `dist/` em HTTPS (ex.: GitHub Pages, Netlify, Vercel) e abra no browser do aparelho — aí o instalador aparece. O PWA foi gerado com `vite-plugin-pwa` + Workbox.
 
 ## Usar com IA real
 
@@ -42,7 +51,10 @@ src/main.js       interface e interações (conversação + repetição)
 src/api.js        configuração, chamadas de API, voz neural e modo demo
 src/data.js       idiomas, tópicos e respostas do modo demo
 src/practice.js   banco original de exercícios do Modo Repetição
-src/style.css     design original
+src/style.css     design system v2 (moderno e responsivo)
+scripts/icon.svg  origem dos ícones (gerados com sharp)
+public/icons/     ícones PWA (192/512, maskable, apple-touch, favicon)
+vite.config.js    configuração PWA (manifest + service worker)
 android/          projeto nativo gerado pelo Capacitor
   .../SpeechPlugin.java   reconhecimento de voz nativo
 OnSpeak-debug.apk           APK pronto

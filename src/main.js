@@ -1,4 +1,5 @@
 import './style.css';
+import { registerSW } from 'virtual:pwa-register';
 import { Capacitor } from '@capacitor/core';
 import { LANGUAGES, TOPICS } from './data.js';
 import { SPEAK_SAMPLE, buildSession, checkAnswer } from './practice.js';
@@ -720,6 +721,7 @@ function render() {
   if (S.screen === 'lesson') renderChatOnly();
   if (S.screen === 'practiceRun') renderPracticeOnly();
   $$('.nav-item', app).forEach(b => b.classList.toggle('active', b.dataset.nav === S.screen));
+  mountInstallBanner();
 }
 
 function go(screen) {
@@ -867,4 +869,72 @@ function finishOnboarding() {
   go('home');
 }
 
+/* ---------------- PWA ---------------- */
+let deferredPrompt = null;
+let installDismissed = sessionStorage.getItem('onspeak_install_dismissed') === '1';
+
+function handleShortcut() {
+  const mode = new URLSearchParams(location.search).get('mode');
+  if (mode === 'practice') S.screen = 'practice';
+  else if (mode === 'chat') {
+    S.topic = S.topic || TOPICS[0];
+    S.messages = (S.data.chats?.[S.topic.id] || []).map(m => ({ ...m }));
+    S.screen = 'lesson';
+  }
+}
+
+function installBanner() {
+  if (Capacitor.isNativePlatform() || !deferredPrompt || installDismissed) return '';
+  if (S.screen !== 'home') return '';
+  return `<div class="install-banner" id="installBanner">
+    <span class="ib-ic">📲</span>
+    <span class="ib-txt"><strong>Instale o ON SPEAK</strong><small>Use como app, direto na tela inicial</small></span>
+    <button id="installBtn">Instalar</button>
+    <button class="ib-close" id="installClose" aria-label="Fechar">✕</button>
+  </div>`;
+}
+
+if (!Capacitor.isNativePlatform()) {
+  const updateSW = registerSW({
+    immediate: true,
+    onOfflineReady() { console.info('[ON SPEAK] Pronto para uso offline ✓'); },
+    onNeedRefresh() { updateSW(true); }
+  });
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (S.screen === 'home') render();
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    toast('🎉 ON SPEAK instalado!');
+  });
+}
+
+handleShortcut();
 render();
+
+// Insere o banner de instalação na home quando disponível
+function mountInstallBanner() {
+  const host = $('#app .screen .scroll');
+  if (!host || $('#installBanner')) return;
+  const html = installBanner();
+  if (!html) return;
+  host.insertAdjacentHTML('afterbegin', html);
+  $('#installBtn')?.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    $('#installBanner')?.remove();
+  });
+  $('#installClose')?.addEventListener('click', () => {
+    installDismissed = true;
+    sessionStorage.setItem('onspeak_install_dismissed', '1');
+    $('#installBanner')?.remove();
+  });
+}
+
+// Detecta mudança de conexão para avisar o usuário
+window.addEventListener('online', () => toast('🌐 Conectado — IA disponível'));
+window.addEventListener('offline', () => toast('📴 Offline — modo demo ativo'));
