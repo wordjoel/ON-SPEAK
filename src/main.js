@@ -1,7 +1,8 @@
 import './style.css';
 import { Capacitor } from '@capacitor/core';
 import { LANGUAGES, TOPICS } from './data.js';
-import { getConfig, saveConfig, getData, saveData, resetData, registerDay, sendChat, testConnection } from './api.js';
+import { SPEAK_SAMPLE, buildSession, checkAnswer } from './practice.js';
+import { getConfig, saveConfig, getData, saveData, resetData, registerDay, sendChat, testConnection, speakWithApi } from './api.js';
 
 /* ---------------- helpers ---------------- */
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -50,7 +51,13 @@ const S = {
   typing: false,
   recording: false,
   awarded: false,
-  provider: 'openai'
+  provider: 'openai',
+  practiceTopic: 'all',
+  pz: {
+    session: [], idx: 0, hearts: 3, correct: 0, selected: null,
+    input: '', transcript: '', checked: false, ok: false, finished: false,
+    start: 0, topic: null, earned: 0
+  }
 };
 
 if (!S.cfg.onboarded && !getData().onboarded) S.screen = 'onboarding';
@@ -87,19 +94,82 @@ function setRec(on) {
   if (mic) { mic.classList.toggle('rec', on); mic.textContent = on ? '⏹' : '🎤'; }
 }
 
-function speak(text, btn) {
+let cachedVoices = [];
+function loadVoices() {
+  return new Promise(resolve => {
+    if (!('speechSynthesis' in window)) return resolve([]);
+    const now = window.speechSynthesis.getVoices() || [];
+    if (now.length) { cachedVoices = now; return resolve(now); }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('voiceschanged', finish);
+      cachedVoices = window.speechSynthesis.getVoices() || [];
+      resolve(cachedVoices);
+    };
+    window.addEventListener('voiceschanged', finish);
+    setTimeout(finish, 1800);
+  });
+}
+
+/** Prefere vozes naturais/neurais em vez das sintéticas antigas. */
+function pickVoice(voices, lang, uri) {
+  if (uri) {
+    const exact = voices.find(v => v.voiceURI === uri);
+    if (exact) return exact;
+  }
+  const base = lang.slice(0, 2).toLowerCase();
+  const list = voices.filter(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(base));
+  if (!list.length) return null;
+  const score = v => {
+    const n = (v.name || '').toLowerCase();
+    let s = 0;
+    if (/natural|neural|premium|online/.test(n)) s += 100;
+    if (/google|aria|jenny|sonia|libby|amber|ava|emma/.test(n)) s += 55;
+    if (v.localService === false) s += 20;
+    if (/david|zira|hazel|mark|george|samantha/.test(n)) s -= 45;
+    return s;
+  };
+  return list.sort((a, b) => score(b) - score(a))[0];
+}
+
+function cleanForSpeech(text) {
+  return String(text || '')
+    .replace(/[💡⚠️✨👏🎯🌱🚀🦜🎉👌📊]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\*+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function speak(text, btn) {
+  const clean = cleanForSpeech(text);
+  if (!clean) return;
+  const onStart = () => { setTalking(true); if (btn) btn.textContent = '🔊'; };
+  const onEnd = () => { setTalking(false); if (btn) btn.textContent = '🔈'; };
+  window.speechSynthesis?.cancel();
+
+  if (S.cfg.ttsMode === 'api' && S.cfg.apiKey) {
+    onStart();
+    const ok = await speakWithApi(clean, { onEnd });
+    if (ok) return;
+    onEnd();
+    toast('Voz neural indisponível — usando a voz do aparelho.');
+  }
+
   if (!('speechSynthesis' in window)) { toast('Síntese de voz indisponível neste dispositivo.'); return; }
-  const clean = String(text).replace(/[💡⚠️✨👏🎯🌱]/g, '').replace(/\(.*?\)/g, '').trim();
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(clean);
+  const voices = await loadVoices();
   const lang = S.cfg.lang === 'es' ? 'es-ES' : 'en-US';
+  const u = new SpeechSynthesisUtterance(clean);
   u.lang = lang;
   u.rate = Number(S.cfg.voiceRate) || 0.95;
-  const voices = window.speechSynthesis.getVoices() || [];
-  const v = voices.find(x => x.lang?.toLowerCase() === lang.toLowerCase()) || voices.find(x => x.lang?.toLowerCase().startsWith(lang.slice(0, 2)));
-  if (v) u.voice = v;
-  u.onstart = () => { setTalking(true); if (btn) btn.textContent = '🔊'; };
-  u.onend = u.onerror = () => { setTalking(false); if (btn) btn.textContent = '🔈'; };
+  u.pitch = Number(S.cfg.pitch) || 1.05;
+  const v = pickVoice(voices, lang, S.cfg.voiceURI);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.onstart = onStart;
+  u.onend = onEnd;
+  u.onerror = onEnd;
   window.speechSynthesis.speak(u);
 }
 
@@ -207,6 +277,7 @@ function renderChatOnly() {
 const NAV = `<div class="bottom-nav">
   <button class="nav-item" data-nav="home"><span class="ico">🏠</span>Início</button>
   <button class="nav-item" data-nav="lesson"><span class="ico">💬</span>Conversar</button>
+  <button class="nav-item" data-nav="practice"><span class="ico">🔁</span>Praticar</button>
   <button class="nav-item" data-nav="progress"><span class="ico">📊</span>Progresso</button>
   <button class="nav-item" data-nav="settings"><span class="ico">⚙️</span>Ajustes</button>
 </div>`;
@@ -243,11 +314,26 @@ function screenHome() {
       <div class="hero">
         <small>${L.flag} ${L.name} · hoje</small>
         <h1>Olá, ${esc(S.cfg.name || 'amigo')}! 👋</h1>
-        <p>Pronto para mais uma conversa? São só 5 minutinhos.</p>
-        <button class="btn btn-light sm" id="continueBtn">Continuar aprendendo →</button>
+        <p>Converse com a Libi ou repita até fixar. Você escolhe.</p>
+        <button class="btn btn-light sm" id="continueBtn">Conversar →</button>
         <div class="hero-avatar">${mascotSVG()}</div>
       </div>
-      <div class="section-title">Escolha uma aula <span>· ${TOPICS.length} temas</span></div>
+      <div class="section-title">Como quer aprender?</div>
+      <div class="mode-grid">
+        <button class="mode-card mode-chat" data-mode="chat">
+          <span class="mode-ic">💬</span>
+          <strong>Conversação</strong>
+          <small>Converse livre com a Libi e receba dicas na hora.</small>
+          <span class="mode-go">Abrir →</span>
+        </button>
+        <button class="mode-card mode-repeat" data-mode="practice">
+          <span class="mode-ic">🔁</span>
+          <strong>Repetição</strong>
+          <small>Exercícios rápidos, corações e XP para fixar.</small>
+          <span class="mode-go">Praticar →</span>
+        </button>
+      </div>
+      <div class="section-title">Temas <span>· ${TOPICS.length} disponíveis</span></div>
       ${TOPICS.map(t => `<button class="topic" data-topic="${t.id}">
         <span class="emoji">${t.emoji}</span>
         <span class="meta"><strong>${t.title}</strong><small>${t.desc}</small></span>
@@ -279,6 +365,229 @@ function screenLesson() {
       <button class="round" id="micBtn" title="Falar">🎤</button>
       <input id="msgInput" placeholder="Escreva ou fale…" autocomplete="off" enterkeyhint="send" />
       <button class="round send" id="sendBtn" title="Enviar">➤</button>
+    </div>
+  </div>`;
+}
+
+/* ---------------- modo repetição ---------------- */
+let audioCtx;
+function beep(ok) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = ok ? [523.25, 659.25, 783.99] : [233.08, 174.61];
+    notes.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      const t = audioCtx.currentTime + i * 0.09;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t + 0.2);
+    });
+  } catch { /* áudio não disponível */ }
+}
+
+function screenPracticeIntro() {
+  return `<div class="screen">
+    <div class="lesson-head">
+      <div class="row">
+        <button class="icon-btn" id="backBtn" style="box-shadow:none">‹</button>
+        <div class="title">🔁 Modo Repetição<small>Exercícios rápidos para fixar</small></div>
+      </div>
+    </div>
+    <div class="scroll">
+      <div class="intro-hero">
+        <div class="intro-emoji">🎯</div>
+        <h2>Repita até virar nativo</h2>
+        <p>6 perguntas curtas, 3 corações e XP a cada acerto. Escolha um tema e comece.</p>
+      </div>
+      <div class="section-title">Escolha o tema</div>
+      <div class="topic-chips">
+        <button class="tchip ${S.practiceTopic === 'all' ? 'on' : ''}" data-ptopic="all">🌐 Todos</button>
+        ${TOPICS.map(t => `<button class="tchip ${S.practiceTopic === t.id ? 'on' : ''}" data-ptopic="${t.id}">${t.emoji} ${t.title}</button>`).join('')}
+      </div>
+      <button class="btn block" id="startPractice" style="margin-top:18px">Começar prática →</button>
+      <div class="hint" style="text-align:center;margin-top:10px">Use fones nos exercícios de escuta e fala. 🎧</div>
+    </div>
+    ${NAV}
+  </div>`;
+}
+
+function screenPracticeRun() {
+  return `<div class="screen practice">
+    <div class="practice-head">
+      <button class="icon-btn" id="quitPractice" style="box-shadow:none">✕</button>
+      <div class="hearts" id="hearts">❤️ ❤️ ❤️</div>
+      <div class="step-count" id="stepCount">1/6</div>
+    </div>
+    <div class="progress-track" style="margin:0 16px 8px"><div class="progress-fill" id="pzFill" style="width:0%"></div></div>
+    <div class="scroll practice-body" id="practiceBody"></div>
+    <div class="practice-footer" id="practiceFooter"></div>
+  </div>`;
+}
+
+function renderPracticeOnly() {
+  const p = S.pz;
+  const body = $('#practiceBody'), footer = $('#practiceFooter');
+  if (!body || !footer) return;
+  const q = p.session[p.idx];
+  if (!q) return;
+  const total = p.session.length;
+
+  const hearts = $('#hearts');
+  if (hearts) hearts.innerHTML = Array.from({ length: 3 }, (_, i) => i < p.hearts ? '❤️' : '🖤').join(' ');
+  const step = $('#stepCount'); if (step) step.textContent = `${Math.min(p.idx + 1, total)}/${total}`;
+  const fill = $('#pzFill'); if (fill) fill.style.width = (p.idx / total) * 100 + '%';
+
+  let answerHtml;
+  if (['choice', 'blank', 'listen'].includes(q.type)) {
+    answerHtml = `<div class="answer-options">${q.options.map((o, i) => {
+      const chosen = p.selected === o;
+      const cls = p.checked ? (o === q.answer ? 'correct' : (chosen ? 'wrong' : '')) : (chosen ? 'selected' : '');
+      return `<button class="answer-opt ${cls}" data-opt="${esc(o)}" ${p.checked ? 'disabled' : ''}>
+        <span class="opt-key">${String.fromCharCode(65 + i)}</span><span>${esc(o)}</span>
+      </button>`;
+    }).join('')}</div>`;
+  } else if (q.type === 'translate') {
+    answerHtml = `<div class="field"><label>Sua resposta</label>
+      <input id="pzInput" value="${esc(p.input)}" placeholder="Escreva em ${esc(LANGUAGES[S.cfg.lang]?.name || '')}" ${p.checked ? 'disabled' : ''} autocomplete="off" />
+    </div>`;
+  } else {
+    answerHtml = `<div class="speak-answer">
+      <button class="speak-big" id="pzMic">🎤 Toque e fale</button>
+      <div class="transcript">${p.transcript ? esc(p.transcript) : 'Sua fala aparecerá aqui…'}</div>
+    </div>`;
+  }
+
+  const promptHtml = q.type === 'listen'
+    ? `<button class="listen-btn" id="pzListen">🔊 Ouvir novamente</button><div class="listen-hint">Toque para escutar a frase</div>`
+    : `<div class="q-prompt ${q.type === 'speak' ? 'pt' : ''}">${esc(q.prompt)}</div>`;
+
+  const feedback = p.checked ? `<div class="feedback ${p.ok ? 'ok' : 'no'} ${p.ok ? 'pop' : 'shake'}">
+    <div class="fb-title">${p.ok ? '✅ Mandou bem!' : '❌ Quase!'}</div>
+    ${p.ok ? '' : `<div class="fb-answer">Resposta: <strong>${esc(q.answer)}</strong></div>`}
+    <div class="fb-tip">💡 ${esc(q.tip || '')}</div>
+  </div>` : '';
+
+  body.innerHTML = `<div class="q-instruction">${esc(q.sub || '')}</div>${promptHtml}${answerHtml}${feedback}`;
+
+  const canCheck = q.type === 'translate' ? !!p.input.trim() : q.type === 'speak' ? !!p.transcript : p.selected !== null;
+  footer.innerHTML = p.checked
+    ? `<button class="btn block" id="pzNext">${p.idx + 1 >= total ? 'Finalizar' : 'Continuar'} →</button>`
+    : `<button class="btn block" id="pzCheck" ${canCheck ? '' : 'disabled'}>Verificar</button>`;
+
+  $$('[data-opt]', body).forEach(b => b.addEventListener('click', () => {
+    if (p.checked) return;
+    p.selected = b.dataset.opt;
+    renderPracticeOnly();
+  }));
+  $('#pzInput')?.addEventListener('input', e => {
+    p.input = e.target.value;
+    const chk = $('#pzCheck'); if (chk) chk.disabled = !p.input.trim();
+  });
+  $('#pzListen')?.addEventListener('click', () => speak(q.prompt));
+  $('#pzMic')?.addEventListener('click', startPracticeSpeech);
+  $('#pzCheck')?.addEventListener('click', checkPractice);
+  $('#pzNext')?.addEventListener('click', nextPractice);
+  if (q.type === 'listen') setTimeout(() => speak(q.prompt), 250);
+}
+
+async function startPracticeSpeech() {
+  const p = S.pz;
+  if (p.checked) return;
+  const lang = S.cfg.lang === 'es' ? 'es-ES' : 'en-US';
+  const btn = $('#pzMic');
+  if (btn) { btn.textContent = '🎙️ Ouvindo…'; btn.classList.add('rec'); }
+  try {
+    let text = '';
+    if (Capacitor.isNativePlatform() && Capacitor.Plugins?.Speech) {
+      const r = await Capacitor.Plugins.Speech.recognize({ lang });
+      text = r?.text || '';
+    } else {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) throw new Error('indisponível');
+      text = await new Promise((res, rej) => {
+        const rec = new SR();
+        rec.lang = lang; rec.interimResults = false; rec.maxAlternatives = 1;
+        rec.onresult = e => res(e.results[0][0].transcript);
+        rec.onerror = e => rej(new Error(e.error || 'erro'));
+        rec.start();
+      });
+    }
+    p.transcript = String(text).trim();
+    renderPracticeOnly();
+  } catch {
+    toast('Não entendi a fala. Tente de novo.');
+    if (btn) { btn.textContent = '🎤 Toque e fale'; btn.classList.remove('rec'); }
+  }
+}
+
+function checkPractice() {
+  const p = S.pz, q = p.session[p.idx];
+  if (!q || p.checked) return;
+  const value = q.type === 'translate' ? p.input : q.type === 'speak' ? p.transcript : p.selected;
+  p.ok = checkAnswer(q, value);
+  p.checked = true;
+  if (p.ok) p.correct++; else p.hearts--;
+  beep(p.ok);
+  navigator.vibrate?.(p.ok ? 35 : [60, 40, 60]);
+  renderPracticeOnly();
+}
+
+function nextPractice() {
+  const p = S.pz;
+  if (p.hearts <= 0 || p.idx + 1 >= p.session.length) { finishPractice(); return; }
+  p.idx++;
+  p.selected = null; p.input = ''; p.transcript = ''; p.checked = false; p.ok = false;
+  renderPracticeOnly();
+}
+
+function startPractice(topicId) {
+  S.practiceTopic = topicId || 'all';
+  S.pz = {
+    session: buildSession(S.cfg.lang, topicId === 'all' ? null : topicId, 6),
+    idx: 0, hearts: 3, correct: 0, selected: null, input: '', transcript: '',
+    checked: false, ok: false, finished: false, start: Date.now(), topic: topicId, earned: 0
+  };
+  go('practiceRun');
+}
+
+function finishPractice() {
+  const p = S.pz;
+  const perfect = p.correct === p.session.length && p.hearts > 0;
+  p.finished = true;
+  p.earned = p.correct * 5 + (perfect ? 10 : 0);
+  S.data = registerDay();
+  persistData({
+    lessons: (S.data.lessons || 0) + 1,
+    xp: (S.data.xp || 0) + p.earned,
+    minutes: (S.data.minutes || 0) + 2
+  });
+  beep(true);
+  go('practiceResult');
+}
+
+function screenPracticeResult() {
+  const p = S.pz, total = p.session.length;
+  const pct = Math.round((p.correct / total) * 100);
+  const perfect = p.correct === total && p.hearts > 0;
+  return `<div class="screen result">
+    <div class="result-hero">
+      <div class="confetti">${Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
+      <div class="result-emoji">${perfect ? '🏆' : p.hearts > 0 ? '🎉' : '💪'}</div>
+      <h2>${perfect ? 'Perfeito!' : p.hearts > 0 ? 'Lição concluída!' : 'Sem corações…'}</h2>
+      <p>${perfect ? 'Você acertou tudo. Imbatível!' : p.hearts > 0 ? 'Mais um passo na sua fluência.' : 'Não desanime — tente de novo!'}</p>
+    </div>
+    <div class="scroll">
+      <div class="stats-grid">
+        <div class="stat"><div class="v">${p.correct}/${total}</div><div class="k">acertos</div></div>
+        <div class="stat"><div class="v">${pct}%</div><div class="k">aproveitamento</div></div>
+        <div class="stat"><div class="v">+${p.earned}</div><div class="k">XP ganho</div></div>
+        <div class="stat"><div class="v">${p.hearts}❤️</div><div class="k">corações restantes</div></div>
+      </div>
+      <button class="btn block" id="againPractice">Praticar de novo</button>
+      <button class="btn ghost block" id="resultHome" style="margin-top:10px">Voltar ao início</button>
     </div>
   </div>`;
 }
@@ -344,14 +653,37 @@ function screenSettings() {
         <div class="hint">Sua chave fica salva apenas neste dispositivo. Ela é enviada diretamente ao provedor escolhido.</div>
       </div>
       <div class="card">
-        <h3>Idioma & voz</h3><p>Idioma que a Libi vai praticar com você.</p>
+        <h3>Idioma & voz</h3><p>Escolha como a Libi deve soar.</p>
         <div class="field" style="margin-top:14px"><label>Idioma alvo</label>
           <select id="lang">
             ${Object.entries(LANGUAGES).map(([k, v]) => `<option value="${k}" ${c.lang === k ? 'selected' : ''}>${v.flag} ${v.name}</option>`).join('')}
           </select>
         </div>
+        <div class="field"><label>Tipo de voz</label>
+          <select id="ttsMode">
+            <option value="device" ${c.ttsMode !== 'api' ? 'selected' : ''}>Voz do aparelho (grátis)</option>
+            <option value="api" ${c.ttsMode === 'api' ? 'selected' : ''}>Voz neural pela API ✨</option>
+          </select>
+        </div>
+        <div id="apiVoiceFields" style="${c.ttsMode === 'api' ? '' : 'display:none'}">
+          <div class="field"><label>Voz neural</label>
+            <select id="ttsVoice">
+              ${['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer', 'verse'].map(v => `<option value="${v}" ${c.ttsVoice === v ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Modelo de áudio</label><input id="ttsModel" value="${esc(c.ttsModel)}" placeholder="gpt-4o-mini-tts" /></div>
+          <div class="hint">Áudio gerado na nuvem. Requer chave de API compatível com OpenAI (OpenAI ou personalizado).</div>
+        </div>
+        <div id="deviceVoiceFields" style="${c.ttsMode === 'api' ? 'display:none' : ''}">
+          <div class="field"><label>Voz do aparelho</label>
+            <select id="voiceURI"><option value="">Automática (melhor disponível)</option></select>
+          </div>
+          <div class="hint">Vozes “Natural / Neural / Online” soam mais humanas. ✨ = recomendada.</div>
+        </div>
+        <div class="field"><label>Tom da voz</label><input id="pitch" type="number" min="0.7" max="1.4" step="0.05" value="${c.pitch}" /></div>
+        <div class="field"><label>Velocidade</label><input id="voiceRate" type="number" min="0.6" max="1.3" step="0.05" value="${c.voiceRate}" /></div>
         <div class="field"><label>Como devo te chamar?</label><input id="name" value="${esc(c.name || '')}" placeholder="Seu nome" /></div>
-        <div class="field"><label>Velocidade da voz</label><input id="voiceRate" type="number" min="0.6" max="1.3" step="0.05" value="${c.voiceRate}" /></div>
+        <button class="btn ghost block sm" id="previewVoice">🔊 Ouvir amostra</button>
       </div>
       <div class="card">
         <h3>Aparência</h3>
@@ -376,6 +708,9 @@ function render() {
   switch (S.screen) {
     case 'onboarding': html = screenOnboarding(); break;
     case 'lesson': html = screenLesson(); break;
+    case 'practice': html = screenPracticeIntro(); break;
+    case 'practiceRun': html = screenPracticeRun(); break;
+    case 'practiceResult': html = screenPracticeResult(); break;
     case 'progress': html = screenProgress(); break;
     case 'settings': html = screenSettings(); break;
     default: html = screenHome();
@@ -383,6 +718,7 @@ function render() {
   app.innerHTML = html + `<div class="toast" id="toast"></div>`;
   bind();
   if (S.screen === 'lesson') renderChatOnly();
+  if (S.screen === 'practiceRun') renderPracticeOnly();
   $$('.nav-item', app).forEach(b => b.classList.toggle('active', b.dataset.nav === S.screen));
 }
 
@@ -420,6 +756,20 @@ function bind() {
   // home
   $('#continueBtn')?.addEventListener('click', () => openTopic(S.topic?.id || TOPICS[0].id));
   $$('[data-topic]', app).forEach(b => b.addEventListener('click', () => openTopic(b.dataset.topic)));
+  $$('[data-mode]', app).forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.mode === 'practice') go('practice');
+    else openTopic(S.topic?.id || TOPICS[0].id);
+  }));
+
+  // practice
+  $$('[data-ptopic]', app).forEach(b => b.addEventListener('click', () => {
+    S.practiceTopic = b.dataset.ptopic;
+    $$('[data-ptopic]', app).forEach(x => x.classList.toggle('on', x === b));
+  }));
+  $('#startPractice')?.addEventListener('click', () => startPractice(S.practiceTopic));
+  $('#quitPractice')?.addEventListener('click', () => go('practice'));
+  $('#againPractice')?.addEventListener('click', () => startPractice(S.pz.topic || 'all'));
+  $('#resultHome')?.addEventListener('click', () => go('home'));
 
   // lesson
   $('#backBtn')?.addEventListener('click', () => go('home'));
@@ -456,9 +806,43 @@ function bind() {
     b.disabled = false; b.textContent = 'Testar conexão';
     toast(r.msg);
   });
-  $('#lang')?.addEventListener('change', e => persistCfg({ lang: e.target.value }));
-  $('#name')?.addEventListener('change', e => persistCfg({ name: e.target.value.trim() }));
-  $('#voiceRate')?.addEventListener('change', e => persistCfg({ voiceRate: Number(e.target.value) }));
+  const saveVoice = () => {
+    if (!$('#voiceRate')) return;
+    persistCfg({
+      lang: $('#lang')?.value || S.cfg.lang,
+      name: ($('#name')?.value || '').trim(),
+      ttsMode: $('#ttsMode')?.value || 'device',
+      ttsVoice: $('#ttsVoice')?.value || S.cfg.ttsVoice,
+      ttsModel: ($('#ttsModel')?.value || '').trim(),
+      voiceURI: $('#voiceURI')?.value || '',
+      pitch: Number($('#pitch')?.value) || 1.05,
+      voiceRate: Number($('#voiceRate')?.value) || 0.95
+    });
+  };
+  ['#lang', '#name', '#ttsMode', '#ttsVoice', '#ttsModel', '#voiceURI', '#pitch', '#voiceRate'].forEach(sel => {
+    $(sel)?.addEventListener('change', () => {
+      saveVoice();
+      if (sel === '#ttsMode') {
+        $('#apiVoiceFields').style.display = S.cfg.ttsMode === 'api' ? '' : 'none';
+        $('#deviceVoiceFields').style.display = S.cfg.ttsMode === 'api' ? 'none' : '';
+      }
+    });
+  });
+  $('#previewVoice')?.addEventListener('click', () => {
+    saveVoice();
+    speak(SPEAK_SAMPLE[S.cfg.lang] || SPEAK_SAMPLE.en, $('#previewVoice'));
+  });
+
+  if (S.screen === 'settings') {
+    loadVoices().then(voices => {
+      const sel = $('#voiceURI');
+      if (!sel) return;
+      const cur = S.cfg.voiceURI || '';
+      sel.innerHTML = `<option value="">Automática (melhor disponível)</option>` + voices.map(v =>
+        `<option value="${esc(v.voiceURI)}" ${cur === v.voiceURI ? 'selected' : ''}>${esc(v.name)} · ${esc(v.lang)}${/natural|neural|premium|online/i.test(v.name) ? ' ✨' : ''}</option>`
+      ).join('');
+    });
+  }
   $$('[data-theme-set]', app).forEach(b => b.addEventListener('click', () => {
     const t = b.dataset.themeSet;
     persistCfg({ theme: t });

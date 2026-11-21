@@ -5,13 +5,17 @@ Não é cópia, fork ou distribuição de nenhum produto de terceiros (inclusive
 
 ## O que o app faz
 
-- **Conversa com a Libi** (tutora IA) em inglês ou espanhol, com correção gentil e perguntas de continuidade.
+O **ON SPEAK** reúne o melhor de dois mundos em um só app original:
+
+- **💬 Modo Conversação** — converse livre com a Libi (tutora IA) em inglês ou espanhol, com correção gentil e perguntas de continuidade.
+- **🔁 Modo Repetição** — exercícios rápidos e gamificados (múltipla escolha, tradução, lacuna, escuta e fala) com corações, XP e feedback imediato. É o "melhor do Duolingo" com identidade própria.
 - **6 temas de aula**: conversa do dia, viagens, comida, trabalho, saúde e cultura.
 - **Entrada de voz**: reconhecimento nativo no Android (`RecognizerIntent`) e Web Speech API no navegador.
-- **Síntese de voz** para ouvir as respostas da tutora, com controle de velocidade.
+- **Síntese de voz aprimorada**: escolha automática de vozes naturais/neurais do aparelho, seleção manual da voz, controle de tom e velocidade — ou **voz neural pela API** (OpenAI-compatible, ex.: `gpt-4o-mini-tts`) para soar ainda mais humano.
 - **Modo demo offline**: funciona sem chave de API, com respostas locais e dicas de vocabulário.
 - **API compatível com OpenAI**: configure OpenAI, Groq, Gemini (endpoint compatível) ou URL customizada. A chave fica só no dispositivo.
-- **Progresso**: aulas concluídas, minutos, XP, sequência diária, gráfico semanal e conquistas.
+- **Progresso**: aulas concluídas, minutos, XP, sequência diária, gráfico semanal e conquistas — somado tanto pela conversa quanto pelos exercícios.
+- **Feedback rico**: sons, vibração e animações de acerto/erro nos exercícios.
 - **Tema claro/escuro**, onboarding e persistência local.
 
 ## Instalar
@@ -34,9 +38,10 @@ Sem chave, o app continua funcionando no **modo demo** (badge “demo” na tela
 ## Estrutura
 
 ```
-src/main.js       interface e interações
-src/api.js        configuração, chamadas de API e modo demo
+src/main.js       interface e interações (conversação + repetição)
+src/api.js        configuração, chamadas de API, voz neural e modo demo
 src/data.js       idiomas, tópicos e respostas do modo demo
+src/practice.js   banco original de exercícios do Modo Repetição
 src/style.css     design original
 android/          projeto nativo gerado pelo Capacitor
   .../SpeechPlugin.java   reconhecimento de voz nativo

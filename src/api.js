@@ -11,6 +11,11 @@ const DEFAULT_CFG = {
   lang: 'en',
   name: 'Amigo',
   voiceRate: 0.95,
+  pitch: 1.05,
+  voiceURI: '',
+  ttsMode: 'device',
+  ttsModel: 'gpt-4o-mini-tts',
+  ttsVoice: 'nova',
   theme: 'light'
 };
 
@@ -65,6 +70,68 @@ export function registerDay() {
   return saveData({ lastDay: today, streak, week });
 }
 
+/** URL da API. No dev server, usa proxy local para a OpenAI (evita CORS no navegador). */
+function endpoint(path) {
+  const base = (getConfig().baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  if (!Capacitor.isNativePlatform() && import.meta.env?.DEV && base.startsWith('https://api.openai.com')) {
+    return '/openai' + base.replace('https://api.openai.com', '') + path;
+  }
+  return base + path;
+}
+
+/** Voz neural via API de áudio compatível com OpenAI (gpt-4o-mini-tts / tts-1). */
+export async function speakWithApi(text, hooks = {}) {
+  const cfg = getConfig();
+  if (cfg.ttsMode !== 'api' || !cfg.apiKey) return false;
+
+  const body = {
+    model: cfg.ttsModel || 'gpt-4o-mini-tts',
+    voice: cfg.ttsVoice || 'nova',
+    input: String(text || '').slice(0, 4096),
+    response_format: 'mp3'
+  };
+  const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey.trim() };
+
+  try {
+    let data;
+    if (Capacitor.isNativePlatform()) {
+      const res = await CapacitorHttp.post({
+        url: endpoint('/audio/speech'), headers, data: body,
+        responseType: 'arraybuffer', connectTimeout: 15000, readTimeout: 30000
+      });
+      data = res.data;
+    } else {
+      const res = await fetch(endpoint('/audio/speech'), {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.arrayBuffer();
+    }
+
+    let bytes;
+    if (data instanceof ArrayBuffer) bytes = new Uint8Array(data);
+    else if (ArrayBuffer.isView(data)) bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    else if (typeof data === 'string') {
+      const bin = atob(data);
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else throw new Error('Áudio em formato desconhecido');
+
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+    const audio = new Audio(url);
+    let ended = false;
+    const finish = () => { if (ended) return; ended = true; hooks.onEnd?.(); URL.revokeObjectURL(url); };
+    audio.onended = finish;
+    audio.onerror = finish;
+    audio.onplay = () => hooks.onStart?.();
+    await audio.play();
+    return true;
+  } catch (err) {
+    console.warn('TTS via API falhou:', err);
+    return false;
+  }
+}
+
 function systemPrompt(lang) {
   const L = LANGUAGES[lang] || LANGUAGES.en;
   return `Você é a Libi, uma tutora simpática e paciente de ${L.name} (${L.native}).
@@ -86,7 +153,7 @@ export async function sendChat(messages, lang) {
     return { text: demoReply(userText, lang), demo: true };
   }
 
-  const url = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/chat/completions';
+  const url = endpoint('/chat/completions');
   const body = {
     model: cfg.model || 'gpt-4o-mini',
     messages: [{ role: 'system', content: systemPrompt(lang) }, ...messages.slice(-12)],
@@ -124,7 +191,7 @@ export async function sendChat(messages, lang) {
 export async function testConnection() {
   const cfg = getConfig();
   if (!cfg.apiKey) return { ok: false, msg: 'Informe uma chave de API primeiro.' };
-  const url = (cfg.baseUrl || '').replace(/\/+$/, '') + '/chat/completions';
+  const url = endpoint('/chat/completions');
   const body = { model: cfg.model || 'gpt-4o-mini', messages: [{ role: 'user', content: 'Reply with the single word: OK' }], max_tokens: 8 };
   const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey.trim() };
   try {
