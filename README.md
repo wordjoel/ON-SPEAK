@@ -50,6 +50,16 @@ OnSpeak-debug.apk           APK pronto
 
 Identidade do app: nome **ON SPEAK**, pacote `com.original.onspeak`.
 
+## Repositório oficial
+
+🔗 **https://github.com/wordjoel/ON-SPEAK** (branch `main`)
+
+```powershell
+git clone https://github.com/wordjoel/ON-SPEAK.git
+```
+
+O repositório `wordjoel/lingua-viva` permanece apenas como backup histórico.
+
 ## Recompilar
 
 O Capacitor 7 precisa de **JDK 21**. O ambiente tinha só JDK 17, então o build usa um JDK 21 portátil em `%TEMP%\opencode\jdk21\jdk-21.0.13.1+2`. Se ele não existir, baixe um JDK 21 e ajuste o caminho em `build-apk.ps1` (ou defina `JAVA_HOME` antes de rodar).
