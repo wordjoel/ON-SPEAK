@@ -1,6 +1,6 @@
 {
-  "appId": "com.original.linguaviva",
-  "appName": "Lingua Viva",
+  "appId": "com.original.onspeak",
+  "appName": "ON SPEAK",
   "webDir": "dist",
   "android": {
     "allowMixedContent": true

@@ -1,4 +1,4 @@
-package com.original.linguaviva;
+package com.original.onspeak;
 
 import android.Manifest;
 import android.app.Activity;

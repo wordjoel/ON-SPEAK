@@ -235,7 +235,7 @@ function screenHome() {
   const L = LANGUAGES[S.cfg.lang] || LANGUAGES.en;
   return `<div class="screen">
     <div class="topbar">
-      <div class="brand"><span class="brand-mark">L</span>Lingua Viva</div>
+      <div class="brand"><span class="brand-mark">ON</span>ON SPEAK</div>
       <div class="spacer"></div>
       <div class="pill">🔥 ${d.streak || 1}</div>
     </div>
@@ -296,7 +296,7 @@ function screenProgress() {
     { ic: '🎯', k: '10 aulas', got: (d.lessons || 0) >= 10 }
   ];
   return `<div class="screen">
-    <div class="topbar"><div class="brand"><span class="brand-mark">L</span>Seu progresso</div><div class="spacer"></div><div class="pill">🔥 ${d.streak || 1}</div></div>
+    <div class="topbar"><div class="brand"><span class="brand-mark">ON</span>Seu progresso</div><div class="spacer"></div><div class="pill">🔥 ${d.streak || 1}</div></div>
     <div class="scroll">
       <div class="stats-grid">
         <div class="stat"><div class="v">${d.lessons || 0}</div><div class="k">aulas concluídas</div></div>
@@ -324,7 +324,7 @@ function screenSettings() {
     custom: { baseUrl: c.baseUrl, model: c.model }
   };
   return `<div class="screen">
-    <div class="topbar"><div class="brand"><span class="brand-mark">L</span>Ajustes</div></div>
+    <div class="topbar"><div class="brand"><span class="brand-mark">ON</span>Ajustes</div></div>
     <div class="scroll">
       <div class="card">
         <h3>Tutor IA</h3><p>Sem chave, o app funciona no modo demo (offline). Com chave, a Libi usa uma API compatível com OpenAI.</p>
@@ -364,7 +364,7 @@ function screenSettings() {
         <h3>Dados</h3><p>Apaga progresso, conversas e configurações salvas neste aparelho.</p>
         <button class="btn ghost block sm" id="resetBtn" style="margin-top:12px;color:#D64545">Limpar todos os dados</button>
       </div>
-      <div class="foot-note">Lingua Viva v1.0 · projeto independente e original.<br/>Não afiliado a nenhum serviço de terceiros.</div>
+      <div class="foot-note">ON SPEAK v1.0 · projeto independente e original.<br/>Não afiliado a nenhum serviço de terceiros.</div>
     </div>
     ${NAV}
   </div>`;

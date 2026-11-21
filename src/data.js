@@ -1,4 +1,4 @@
-// Conteúdo original do Lingua Viva — idiomas, tópicos e modo demo offline.
+// Conteúdo original do ON SPEAK — idiomas, tópicos e modo demo offline.
 
 export const LANGUAGES = {
   en: { name: 'Inglês', code: 'en-US', flag: '🇺🇸', native: 'English' },

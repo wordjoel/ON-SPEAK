@@ -1,4 +1,4 @@
-# Lingua Viva
+# ON SPEAK
 
 Tutor de idiomas com IA — projeto **original**, criado do zero com Vite + Capacitor.
 Não é cópia, fork ou distribuição de nenhum produto de terceiros (inclusive do site consultado no início). Não usa código, marca, assets ou APIs proprietárias de ninguém.
@@ -16,10 +16,10 @@ Não é cópia, fork ou distribuição de nenhum produto de terceiros (inclusive
 
 ## Instalar
 
-Copie `LinguaViva-debug.apk` para o celular e abra o arquivo (é um build de depuração; o Android pode pedir permissão para instalar fontes desconhecidas).
+Copie `OnSpeak-debug.apk` para o celular e abra o arquivo (é um build de depuração; o Android pode pedir permissão para instalar fontes desconhecidas).
 
 ```powershell
-adb install -r LinguaViva-debug.apk
+adb install -r OnSpeak-debug.apk
 ```
 
 ## Usar com IA real
@@ -40,8 +40,10 @@ src/data.js       idiomas, tópicos e respostas do modo demo
 src/style.css     design original
 android/          projeto nativo gerado pelo Capacitor
   .../SpeechPlugin.java   reconhecimento de voz nativo
-LinguaViva-debug.apk        APK pronto
+OnSpeak-debug.apk           APK pronto
 ```
+
+Identidade do app: nome **ON SPEAK**, pacote `com.original.onspeak`.
 
 ## Recompilar
 
@@ -61,7 +63,7 @@ cd android
 .\gradlew.bat assembleDebug --no-daemon
 ```
 
-O APK sai em `android/app/build/outputs/apk/debug/app-debug.apk` e é copiado para a raiz como `LinguaViva-debug.apk`.
+O APK sai em `android/app/build/outputs/apk/debug/app-debug.apk` e é copiado para a raiz como `OnSpeak-debug.apk`.
 
 ## Observações
 

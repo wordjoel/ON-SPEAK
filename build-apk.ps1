@@ -17,7 +17,7 @@ try {
   try {
     .\gradlew.bat assembleDebug --no-daemon
     $apk = Join-Path $root 'android\app\build\outputs\apk\debug\app-debug.apk'
-    $dest = Join-Path $root 'LinguaViva-debug.apk'
+    $dest = Join-Path $root 'OnSpeak-debug.apk'
     Copy-Item $apk $dest -Force
     Write-Host "`nAPK pronto: $dest"
   } finally { Pop-Location }

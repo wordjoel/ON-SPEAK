@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.original.linguaviva"
+    namespace "com.original.onspeak"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.original.linguaviva"
+        applicationId "com.original.onspeak"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
