@@ -1,0 +1,8 @@
+{
+  "appId": "com.original.linguaviva",
+  "appName": "Lingua Viva",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  }
+}

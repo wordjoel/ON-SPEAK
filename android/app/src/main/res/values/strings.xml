@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lingua Viva</string>
+    <string name="title_activity_main">Lingua Viva</string>
+    <string name="package_name">com.original.linguaviva</string>
+    <string name="custom_url_scheme">com.original.linguaviva</string>
+</resources>
